@@ -27,6 +27,9 @@ def get_db_connection():
     return connection
 
 
+
+
+
 # Create the 'questions' table if it doesn't exist
 def create_questions_table_if_not_exists():
     connection = get_db_connection()
@@ -35,7 +38,8 @@ def create_questions_table_if_not_exists():
         CREATE TABLE IF NOT EXISTS questions (
             question_id SERIAL PRIMARY KEY,
             question TEXT NOT NULL,
-            subject TEXT NOT NULL
+            subject TEXT NOT NULL,
+            correct_answer TEXT NOT NULL
         );
     """)
     connection.commit()
@@ -52,8 +56,8 @@ def create_users_table_if_not_exists():
         CREATE TABLE IF NOT EXISTS users (
             user_id SERIAL PRIMARY KEY,
             username TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL,
-            subject TEXT NOT NULL
+            password TEXT NOT NULL
+           
         );
     """)
     connection.commit()
@@ -66,10 +70,11 @@ def create_answer_table_if_not_exists():
     connection = get_db_connection()
     cursor = connection.cursor()
     cursor.execute("""
-      CREATE TABLE IF NOT EXISTS answers (
-    answer_id SERIAL PRIMARY KEY,
-    answer TEXT NOT NULL,
-    subject_name TEXT NOT NULL
+      CREATE TABLE IF NOT EXISTS user_answers (
+    user_answer_id SERIAL PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    question_id TEXT NOT NULL,
+    Submitted_answer TEXT NOT NULL
   
 );
 
@@ -77,9 +82,10 @@ def create_answer_table_if_not_exists():
     connection.commit()
     cursor.close()
     connection.close()
-
+create_questions_table_if_not_exists()
 create_answer_table_if_not_exists()
 create_users_table_if_not_exists()
+
 
 bcrypt = Bcrypt()
 
@@ -105,14 +111,13 @@ def decode_token(jwt_token):
 @app.route('/sign-up', methods=['POST'])
 def register_user():
     username = request.json['username']
-    subject = request.json['Subject']
     password = request.json['password']
     hashed_password = encode_password(password)
     connection = get_db_connection()
     cursor = connection.cursor()
     cursor.execute("""
-            INSERT INTO users (username, password, subject) VALUES (%s, %s, %s);
-        """, (username, hashed_password, subject))
+            INSERT INTO users (username, password) VALUES (%s, %s);
+        """, (username, hashed_password))
     connection.commit()
     cursor.close()
     connection.close()
@@ -154,26 +159,28 @@ def login_user():
 def create_task():
     subject = request.json['subject']
     question = request.json['question']
+    correct_answer = request.json['correct_answer']
     
 
     connection = get_db_connection()
     cursor = connection.cursor()
 
     cursor.execute("""
-                   INSERT INTO questions (subject, question) VALUES (%s, %s);
-                   """, (subject, question))
+                   INSERT INTO questions (subject, question,correct_answer) VALUES (%s, %s,%s);
+                   """, (subject, question,correct_answer))
     connection.commit()
     cursor.close()
     connection.close()
     return jsonify({"message": "Task created successfully"}), 201
 
+
 #user can get the questions
-@app.route('/get-questions', methods=['POST'])
+@app.route('/get-questions', methods=['GET'])
 def get_questions():
-    subject = request.json['subject'] 
+    subject = request.args.get('subject') 
     jwt_token = request.headers.get('Authorization')  
     decoded_token_payload = decode_token(jwt_token)  
-    decoded_token_payload['user_id']  
+    user_id = decoded_token_payload['user_id']  
     
 
 
@@ -192,7 +199,7 @@ def get_questions():
 
     if questions:
      result = [
-        { "question": question[1], "subject": question[2]}
+        { "question_id": question[0],"question": question[1], "subject": question[2]}
         for question in questions
     ]
      return jsonify(result), 200
@@ -210,8 +217,8 @@ def submit_answer():
     decoded_token_payload = decode_token(jwt_token)
     user_id=decoded_token_payload['user_id']  
     
-    subject_name = request.json['subject_name']
-    answer = request.json['answer']
+    question_id = request.json['question_id']
+    submitted_answer = request.json['submitted_answer']
 
 
     if decoded_token_payload is None:
@@ -223,15 +230,26 @@ def submit_answer():
      connection = get_db_connection()
      cursor = connection.cursor()
      cursor.execute("""
-        INSERT INTO answers (subject_name, answer)
-        VALUES (%s, %s);
-    """, (subject_name, answer))
+        INSERT INTO user_answers (user_id,question_id,submitted_answer)
+        VALUES (%s, %s,%s);
+    """, (user_id,question_id,submitted_answer))
 
     connection.commit()
     cursor.close()
     connection.close()
 
     return jsonify({"message": "Answer submitted successfully"}), 201
+
+
+
+
+
+
+    
+
+    
+    
+  
 
 
 if __name__ == '__main__':
