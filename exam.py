@@ -241,16 +241,38 @@ def submit_answer():
     return jsonify({"message": "Answer submitted successfully"}), 201
 
 
+@app.route('/get-results', methods=['GET'])
+def get_results():
+    jwt_token = request.headers.get('Authorization')
+    decoded_token_payload = decode_token(jwt_token)
 
+    if decoded_token_payload is None:
+        return jsonify({"error": "Invalid or expired token"}), 401
 
+    user_id = decoded_token_payload['user_id']
 
+    connection = get_db_connection()
+    cursor = connection.cursor()
+    cursor.execute("SELECT question_id, submitted_answer FROM user_answers WHERE user_id = %s;", 
+                   (str(user_id),))
+    user_answers = cursor.fetchall()
+    score_count = 0
+    total_questions = len(user_answers)
 
+    for question_id, submitted_answer in user_answers:
+        cursor.execute("SELECT correct_answer FROM questions WHERE question_id = %s;", (question_id,))
+        correct_answer = cursor.fetchone()
+
+        if correct_answer and submitted_answer.lower() == correct_answer[0].lower():
+            score_count += 1
+
+    cursor.close()
+    connection.close()
+
+    return jsonify({
+        "total_questions": total_questions,
+        "score": score_count, 
+    }), 200
     
-
-    
-    
-  
-
-
 if __name__ == '__main__':
     app.run(debug=True)
